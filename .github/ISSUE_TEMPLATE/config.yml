@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/sean2249/claude-monitor/blob/main/SECURITY.md
+    about: Please report security issues privately via the channel described in SECURITY.md — do not open a public issue.
+  - name: Question / discussion
+    url: https://github.com/sean2249/claude-monitor/discussions
+    about: For open-ended questions or ideas, start a Discussion instead of a bug report. (If Discussions is not enabled yet, open a feature request issue.)

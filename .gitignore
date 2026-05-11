@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# env
+.env.local
+.env.*.local
+
+# data (generated summaries)
+data/
+
+# build artifacts
+tsconfig.tsbuildinfo
+
+# maintainer-only AI tooling (Ruflo / Claude Code / OpenSpec)
+CLAUDE.md
+.claude/
+.claude-flow/
+.swarm/
+.mcp.json
+openspec/
+
+# editor
+.vscode/
+
+# personal scratch
+todo.md
+
+# local binary state (Ruflo vector store)
+ruvector.db
+
+# personal blog drafts — CHANGELOG-v*.md and release-notes-v*.md continue to ship publicly
+releases/blog-*.md
+
+# misc
+.DS_Store
+*.pem
