@@ -1,7 +1,7 @@
 # Claude Monitor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 
 A real-time dashboard for monitoring your [Claude Code](https://claude.ai/code) sessions — tracks active conversations, token usage, and estimated cost, with an AI-generated daily summary.
 
@@ -26,7 +26,7 @@ A real-time dashboard for monitoring your [Claude Code](https://claude.ai/code) 
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 20+
 - A [Claude Code](https://claude.ai/code) installation writing JSONL logs to `~/.claude/projects/` (or a custom path via `CLAUDE_PROJECTS_DIR`)
 - An `ANTHROPIC_API_KEY` (only required for the daily summary feature)
 
@@ -67,7 +67,7 @@ npm run typecheck   # tsc --noEmit
 npm run lint        # eslint
 ```
 
-CI runs the same chain on Node 18 and Node 20 — green locally usually means green on PR.
+CI runs the same chain on Node 20 and Node 22 — green locally usually means green on PR.
 
 ## Project structure
 

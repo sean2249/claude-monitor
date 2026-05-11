@@ -5,7 +5,7 @@ Thanks for your interest in helping! Claude Monitor is a small Next.js dashboard
 ## Quick start
 
 ```bash
-# Requires Node.js 18 or newer
+# Requires Node.js 20 or newer
 npm install
 cp .env.example .env.local   # only needed if you want to test the daily summary feature
 npm run dev
@@ -24,7 +24,7 @@ npm test
 npm run build
 ```
 
-CI runs the same chain on Node 18 and Node 20 — if it's green locally, it should be green in CI.
+CI runs the same chain on Node 20 and Node 22 — if it's green locally, it should be green in CI.
 
 ## Configuration
 

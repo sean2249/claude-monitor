@@ -15,7 +15,7 @@ This change prepares Claude Monitor for public release on GitHub. No user-visibl
 - `CODE_OF_CONDUCT.md` — Contributor Covenant 2.1 (adopted by reference)
 - `SECURITY.md` — vulnerability disclosure channel, threat model, supported versions
 - `.github/ISSUE_TEMPLATE/` (bug report, feature request, contact-links config) and `.github/PULL_REQUEST_TEMPLATE.md`
-- `.github/workflows/ci.yml` — lint + typecheck + test + build on Node 18 and Node 20
+- `.github/workflows/ci.yml` — lint + typecheck + test + build on Node 20 and Node 22
 - `.github/dependabot.yml` — weekly npm and GitHub Actions dependency updates
 - `lib/config.ts` — single source of truth for environment-driven runtime config
 - Environment variables: `CLAUDE_PROJECTS_DIR` (defaults to `~/.claude/projects`) and `SUMMARIES_DIR` (defaults to `./data/summaries`), both documented in `.env.example` and the README Configuration section
