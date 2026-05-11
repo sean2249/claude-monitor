@@ -1,5 +1,6 @@
 # Claude Monitor
 
+[![CI](https://github.com/sean2249/claude-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/sean2249/claude-monitor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 
