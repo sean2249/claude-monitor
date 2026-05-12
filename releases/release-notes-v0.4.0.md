@@ -29,7 +29,3 @@ A first cut of this feature shipped progress bars showing "X% of your Pro / Max 
 Rather than ship a number that looked precise but wasn't, this release answers only the question we can answer with certainty: **when does the oldest token in this window expire**. That's a fact derived from the local JSONL, with no plan tier guessing and no token-weighting voodoo.
 
 ---
-
-## Thank You
-
-Thanks to **kiwi lee** ([@sean2249](https://github.com/sean2249) · [kiwi-walk](https://kiwi-walk.com)) for building Claude Monitor.
