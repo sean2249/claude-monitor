@@ -6,6 +6,14 @@
 
 A real-time dashboard for monitoring your [Claude Code](https://claude.ai/code) sessions — tracks active conversations, token usage, and estimated cost, with an AI-generated daily summary.
 
+> **Heads up — this is now a personal side-project.**
+>
+> Anthropic shipped [Claude Agent View](https://code.claude.com/docs/zh-TW/agent-view) (`claude agents`) — an officially supported single screen for every Claude Code session you've spawned. That's exactly the "one home for scattered sessions" idea this dashboard was built around, and Agent View does it better: dispatching new sessions, attaching/detaching, PR status, and background supervision are all first-class.
+>
+> **If you want a daily driver, use Agent View instead** — it's maintained by the team that ships Claude Code and the feature surface will keep growing.
+>
+> Claude Monitor stays alive as my learning playground for JSONL parsing, session UX, and AI summaries. Fork it, borrow ideas, file PRs — just don't expect daily-driver polish.
+
 ## Features
 
 - **Live session tracking** — polls `~/.claude/projects/` every 2 seconds and shows active, waiting, idle, and done sessions
