@@ -93,6 +93,24 @@ describe('summaryFilePath / listSummaries', () => {
     expect(p).toBe(path.join(tmpDir, '2026-05-17__-Users-alice-Projects-my-app.md'));
   });
 
+  it('rangeSummaryFilePath joins with _to_ separator', async () => {
+    const { rangeSummaryFilePath } = await import('../lib/summary');
+    const p = rangeSummaryFilePath(new Date(2026, 4, 11), new Date(2026, 4, 17));
+    expect(p).toBe(path.join(tmpDir, '2026-05-11_to_2026-05-17.md'));
+  });
+
+  it('rangeSummaryFilePath includes project slug', async () => {
+    const { rangeSummaryFilePath } = await import('../lib/summary');
+    const p = rangeSummaryFilePath(
+      new Date(2026, 4, 11),
+      new Date(2026, 4, 17),
+      '-Users-alice-Projects-my-app',
+    );
+    expect(p).toBe(
+      path.join(tmpDir, '2026-05-11_to_2026-05-17__-Users-alice-Projects-my-app.md'),
+    );
+  });
+
   it('formatDateKey pads month and day', async () => {
     const { formatDateKey } = await import('../lib/summary');
     expect(formatDateKey(new Date(2026, 0, 3))).toBe('2026-01-03');
@@ -115,9 +133,32 @@ describe('summaryFilePath / listSummaries', () => {
 
     expect(entries).toHaveLength(3);
     expect(entries[0].date).toBe('2026-05-17');
+    expect(entries[0].endDate).toBeNull();
     expect(entries[0].projectEncoded).toBeNull();
     expect(entries[1].date).toBe('2026-05-17');
     expect(entries[1].projectEncoded).toBe('-Users-alice-Projects-my-app');
     expect(entries[2].date).toBe('2026-05-16');
+  });
+
+  it('listSummaries parses range and range-with-project filenames', async () => {
+    fs.writeFileSync(path.join(tmpDir, '2026-05-11_to_2026-05-17.md'), 'week');
+    fs.writeFileSync(
+      path.join(tmpDir, '2026-05-11_to_2026-05-17__-Users-alice-Projects-my-app.md'),
+      'week+proj',
+    );
+    fs.writeFileSync(path.join(tmpDir, '2026-05-17.md'), 'single');
+
+    const { listSummaries } = await import('../lib/summary');
+    const entries = listSummaries();
+
+    const range = entries.filter((e) => e.endDate !== null);
+    expect(range).toHaveLength(2);
+    expect(range[0].date).toBe('2026-05-11');
+    expect(range[0].endDate).toBe('2026-05-17');
+    const withProj = range.find((e) => e.projectEncoded !== null);
+    expect(withProj?.projectEncoded).toBe('-Users-alice-Projects-my-app');
+
+    const single = entries.find((e) => e.endDate === null);
+    expect(single?.date).toBe('2026-05-17');
   });
 });

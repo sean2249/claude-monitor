@@ -14,6 +14,8 @@ type ProjectInfo = {
   lastActivityAt: string;
 };
 
+type Mode = 'day' | 'range';
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 async function summaryFetcher(url: string): Promise<string | null> {
@@ -29,13 +31,29 @@ function todayKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function buildSummaryUrl(date: string, projectEncoded: string | null): string {
-  const base = `/api/summary/${date}`;
+function shiftDays(key: string, deltaDays: number): string {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(y, m - 1, d + deltaDays);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function buildSummaryUrl(
+  mode: Mode,
+  startDate: string,
+  endDate: string,
+  projectEncoded: string | null,
+): string {
+  const base =
+    mode === 'range'
+      ? `/api/summary/range/${startDate}/${endDate}`
+      : `/api/summary/${startDate}`;
   return projectEncoded ? `${base}?project=${encodeURIComponent(projectEncoded)}` : base;
 }
 
 export default function SummariesPage() {
-  const [date, setDate] = useState<string>(todayKey());
+  const [mode, setMode] = useState<Mode>('day');
+  const [startDate, setStartDate] = useState<string>(todayKey());
+  const [endDate, setEndDate] = useState<string>(todayKey());
   const [projectEncoded, setProjectEncoded] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +64,10 @@ export default function SummariesPage() {
   );
   const { data: projects = [] } = useSWR<ProjectInfo[]>('/api/projects', fetcher);
 
-  const summaryUrl = buildSummaryUrl(date, projectEncoded);
+  const rangeInvalid = mode === 'range' && startDate > endDate;
+  const summaryUrl = rangeInvalid
+    ? null
+    : buildSummaryUrl(mode, startDate, endDate, projectEncoded);
   const {
     data: markdown = null,
     isLoading: loading,
@@ -59,6 +80,7 @@ export default function SummariesPage() {
   );
 
   async function generate() {
+    if (!summaryUrl) return;
     setGenerating(true);
     setError(null);
     try {
@@ -78,8 +100,24 @@ export default function SummariesPage() {
   }
 
   function selectHistory(entry: SummaryListEntry) {
-    setDate(entry.date);
+    if (entry.endDate) {
+      setMode('range');
+      setStartDate(entry.date);
+      setEndDate(entry.endDate);
+    } else {
+      setMode('day');
+      setStartDate(entry.date);
+      setEndDate(entry.date);
+    }
     setProjectEncoded(entry.projectEncoded);
+  }
+
+  function setRangePreset(days: number) {
+    const end = todayKey();
+    const start = shiftDays(end, -(days - 1));
+    setMode('range');
+    setStartDate(start);
+    setEndDate(end);
   }
 
   const hasExisting = markdown !== null;
@@ -110,19 +148,30 @@ export default function SummariesPage() {
             <ul>
               {history.map((entry) => {
                 const isSelected =
-                  entry.date === date && entry.projectEncoded === projectEncoded;
+                  entry.date === startDate &&
+                  (entry.endDate ?? entry.date) === (mode === 'range' ? endDate : startDate) &&
+                  entry.projectEncoded === projectEncoded &&
+                  (entry.endDate ? mode === 'range' : mode === 'day');
                 const label = entry.projectPath
                   ? relativeDisplayPath(entry.projectPath, prefixLen)
                   : entry.projectEncoded ?? 'All projects';
+                const dateLabel = entry.endDate ? `${entry.date} → ${entry.endDate}` : entry.date;
                 return (
-                  <li key={`${entry.date}__${entry.projectEncoded ?? ''}`}>
+                  <li key={`${entry.date}_${entry.endDate ?? ''}__${entry.projectEncoded ?? ''}`}>
                     <button
                       onClick={() => selectHistory(entry)}
                       className={`w-full text-left px-4 py-3 border-b border-gray-900 hover:bg-gray-900 transition-colors ${
                         isSelected ? 'bg-gray-900' : ''
                       }`}
                     >
-                      <div className="text-sm font-medium text-gray-200">{entry.date}</div>
+                      <div className="text-sm font-medium text-gray-200 flex items-center gap-2">
+                        {entry.endDate && (
+                          <span className="px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-purple-900/40 text-purple-300 rounded">
+                            Range
+                          </span>
+                        )}
+                        <span>{dateLabel}</span>
+                      </div>
                       <div className="text-xs text-gray-500 truncate" title={label}>
                         {entry.projectEncoded ? label : 'All projects'}
                       </div>
@@ -136,14 +185,88 @@ export default function SummariesPage() {
 
         {/* Right: controls + content */}
         <section className="flex-1 flex flex-col">
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-800">
-            <label className="text-xs text-gray-500 uppercase tracking-wider">Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-300 focus:outline-none focus:border-gray-500"
-            />
+          {/* Mode tabs */}
+          <div className="flex items-center gap-2 px-6 pt-4">
+            <button
+              onClick={() => {
+                setMode('day');
+                setEndDate(startDate);
+              }}
+              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                mode === 'day'
+                  ? 'bg-gray-700 border-gray-600 text-gray-100'
+                  : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Single day
+            </button>
+            <button
+              onClick={() => setMode('range')}
+              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                mode === 'range'
+                  ? 'bg-gray-700 border-gray-600 text-gray-100'
+                  : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Date range
+            </button>
+            {mode === 'range' && (
+              <div className="flex items-center gap-1 ml-2">
+                <button
+                  onClick={() => setRangePreset(7)}
+                  className="px-2 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
+                >
+                  7d
+                </button>
+                <button
+                  onClick={() => setRangePreset(14)}
+                  className="px-2 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
+                >
+                  14d
+                </button>
+                <button
+                  onClick={() => setRangePreset(30)}
+                  className="px-2 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors"
+                >
+                  30d
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-800 flex-wrap">
+            {mode === 'day' ? (
+              <>
+                <label className="text-xs text-gray-500 uppercase tracking-wider">Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setEndDate(e.target.value);
+                  }}
+                  className="px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-300 focus:outline-none focus:border-gray-500"
+                />
+              </>
+            ) : (
+              <>
+                <label className="text-xs text-gray-500 uppercase tracking-wider">From</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-300 focus:outline-none focus:border-gray-500"
+                />
+                <label className="text-xs text-gray-500 uppercase tracking-wider">To</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-3 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-300 focus:outline-none focus:border-gray-500"
+                />
+              </>
+            )}
             <label className="text-xs text-gray-500 uppercase tracking-wider ml-2">Project</label>
             <select
               value={projectEncoded ?? ''}
@@ -160,7 +283,7 @@ export default function SummariesPage() {
             <div className="flex-1" />
             <button
               onClick={generate}
-              disabled={generating}
+              disabled={generating || rangeInvalid}
               className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition-colors"
             >
               {generating ? 'Generating…' : hasExisting ? 'Regenerate' : 'Generate'}
@@ -173,7 +296,9 @@ export default function SummariesPage() {
                 Scope: <span className="text-gray-300">{selectedProject.projectPath}</span>
               </div>
             )}
-            {loading ? (
+            {rangeInvalid ? (
+              <p className="text-sm text-amber-400">Start date must be on or before end date.</p>
+            ) : loading ? (
               <p className="text-sm text-gray-500">Loading…</p>
             ) : markdown ? (
               <div className="prose prose-invert prose-sm max-w-3xl">
@@ -181,7 +306,8 @@ export default function SummariesPage() {
               </div>
             ) : (
               <p className="text-sm text-gray-500">
-                No summary for {date}
+                No summary for{' '}
+                {mode === 'range' ? `${startDate} → ${endDate}` : startDate}
                 {projectEncoded ? ` · ${selectedProject?.projectPath ?? projectEncoded}` : ''}.
                 Click <span className="text-gray-300">Generate</span> to create one.
               </p>
