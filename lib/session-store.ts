@@ -3,7 +3,7 @@ import path from 'path';
 import { parseIncremental, resetOffset } from './jsonl-parser';
 import { computeStatus } from './status';
 import { estimateCost } from './pricing';
-import type { Session, SessionDetail, SessionStatus, TokenEvent, Tokens } from './types';
+import type { Session, SessionDetail, SessionDigest, SessionStatus, TokenEvent, Tokens } from './types';
 
 type InternalSession = SessionDetail & {
   fileMtime: Date;
@@ -75,6 +75,82 @@ class SessionStore {
     const { tokens } = this.aggregateWindow(start);
     const cost = todaySessions.reduce((acc, s) => acc + s.estimatedCost, 0);
     return { sessionCount: todaySessions.length, tokens, cost };
+  }
+
+  digestsFor(opts: { date: Date; projectEncoded?: string }): {
+    digests: SessionDigest[];
+    sessionCount: number;
+    tokens: Tokens;
+    cost: number;
+  } {
+    const { date, projectEncoded } = opts;
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const end = new Date(start.getTime() + 86_400_000);
+
+    const matched = Array.from(this.sessions.values()).filter((s) => {
+      if (s.isSidechain) return false;
+      if (s.lastActivityAt < start || s.lastActivityAt >= end) return false;
+      if (projectEncoded && s.encodedFolder !== projectEncoded) return false;
+      return true;
+    });
+
+    const tokens: Tokens = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
+    let cost = 0;
+    for (const s of matched) {
+      for (const ev of s.tokenEvents) {
+        if (ev.ts < start || ev.ts >= end) continue;
+        tokens.input += ev.input;
+        tokens.output += ev.output;
+        tokens.cacheRead += ev.cacheRead;
+        tokens.cacheCreation += ev.cacheCreation;
+      }
+      cost += s.estimatedCost;
+    }
+
+    const digests: SessionDigest[] = matched.map((s) => {
+      const msgs = s.messages;
+      const firstUser = msgs.find((m) => m.role === 'user');
+      const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
+
+      const getText = (blocks: typeof msgs[0]['blocks']) =>
+        blocks
+          .filter((b) => b.type === 'text')
+          .map((b) => (b as { type: 'text'; text: string }).text)
+          .join(' ')
+          .slice(0, 500);
+
+      return {
+        project: s.projectPath,
+        startedAt: s.startedAt.toISOString(),
+        endedAt: s.lastActivityAt.toISOString(),
+        status: computeStatus(s.fileMtime, s.lastRole),
+        messageCount: s.messageCount,
+        tokens: s.tokens,
+        cost: s.estimatedCost,
+        firstUserMessage: firstUser ? getText(firstUser.blocks) : '(none)',
+        lastAssistantMessage: lastAssistant ? getText(lastAssistant.blocks) : '(none)',
+      };
+    });
+
+    return { digests, sessionCount: matched.length, tokens, cost };
+  }
+
+  listProjects(): { encodedFolder: string; projectPath: string; lastActivityAt: Date }[] {
+    const byEncoded = new Map<string, { encodedFolder: string; projectPath: string; lastActivityAt: Date }>();
+    for (const s of this.sessions.values()) {
+      if (s.isSidechain) continue;
+      const cur = byEncoded.get(s.encodedFolder);
+      if (!cur || s.lastActivityAt > cur.lastActivityAt) {
+        byEncoded.set(s.encodedFolder, {
+          encodedFolder: s.encodedFolder,
+          projectPath: s.projectPath,
+          lastActivityAt: s.lastActivityAt,
+        });
+      }
+    }
+    return Array.from(byEncoded.values()).sort(
+      (a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime(),
+    );
   }
 
   async upsertFromFile(filePath: string): Promise<void> {

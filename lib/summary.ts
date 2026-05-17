@@ -23,60 +23,107 @@ Last assistant message: ${d.lastAssistantMessage}`;
   return sessionBlocks;
 }
 
-export async function generateTodaySummary(): Promise<string> {
+export function formatDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+export function summaryFilePath(date: Date, projectEncoded?: string): string {
+  const key = formatDateKey(date);
+  const name = projectEncoded ? `${key}__${projectEncoded}.md` : `${key}.md`;
+  return path.join(summariesDir, name);
+}
+
+export type SummaryListEntry = {
+  date: string;
+  projectEncoded: string | null;
+  projectPath: string | null;
+  generatedAt: string;
+};
+
+const FILENAME_RE = /^(\d{4}-\d{2}-\d{2})(?:__(.+))?\.md$/;
+
+export function listSummaries(): SummaryListEntry[] {
+  let files: string[];
+  try {
+    files = fs.readdirSync(summariesDir);
+  } catch {
+    return [];
+  }
+
+  const projectLookup = new Map(
+    store.listProjects().map((p) => [p.encodedFolder, p.projectPath] as const),
+  );
+
+  const entries: SummaryListEntry[] = [];
+  for (const file of files) {
+    const m = FILENAME_RE.exec(file);
+    if (!m) continue;
+    const [, date, projectEncoded] = m;
+    let generatedAt: Date;
+    try {
+      generatedAt = fs.statSync(path.join(summariesDir, file)).mtime;
+    } catch {
+      continue;
+    }
+    entries.push({
+      date,
+      projectEncoded: projectEncoded ?? null,
+      projectPath: projectEncoded ? projectLookup.get(projectEncoded) ?? null : null,
+      generatedAt: generatedAt.toISOString(),
+    });
+  }
+
+  return entries.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    if (a.projectEncoded === b.projectEncoded) return 0;
+    if (a.projectEncoded === null) return -1;
+    if (b.projectEncoded === null) return 1;
+    return a.projectEncoded < b.projectEncoded ? -1 : 1;
+  });
+}
+
+export type GenerateOptions = {
+  date: Date;
+  projectEncoded?: string;
+};
+
+export async function generateSummary(opts: GenerateOptions): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new ApiKeyMissingError();
   }
 
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const end = new Date(start.getTime() + 86_400_000);
+  const { date, projectEncoded } = opts;
+  const { digests, sessionCount, tokens, cost } = store.digestsFor({ date, projectEncoded });
 
-  const { sessionCount, tokens: totalTokens, cost: totalCost } = store.todayStats();
-
-  const sessions = store.list().filter((s) => {
-    return s.lastActivityAt >= start && s.lastActivityAt < end;
-  });
-
-  const digests: SessionDigest[] = sessions.map((s) => {
-    const detail = store.get(s.id);
-    const msgs = detail?.messages ?? [];
-
-    const firstUser = msgs.find((m) => m.role === 'user');
-    const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
-
-    const getText = (blocks: typeof msgs[0]['blocks']) =>
-      blocks
-        .filter((b) => b.type === 'text')
-        .map((b) => (b as { type: 'text'; text: string }).text)
-        .join(' ')
-        .slice(0, 500);
-
-    return {
-      project: s.projectPath,
-      startedAt: s.startedAt.toISOString(),
-      endedAt: s.lastActivityAt.toISOString(),
-      status: s.status,
-      messageCount: s.messageCount,
-      tokens: s.tokens,
-      cost: s.estimatedCost,
-      firstUserMessage: firstUser ? getText(firstUser.blocks) : '(none)',
-      lastAssistantMessage: lastAssistant ? getText(lastAssistant.blocks) : '(none)',
-    };
-  });
+  const dateKey = formatDateKey(date);
+  const projectPath = projectEncoded
+    ? store.listProjects().find((p) => p.encodedFolder === projectEncoded)?.projectPath ?? projectEncoded
+    : null;
 
   const sessionData = buildSummaryPrompt(digests);
 
   const client = new Anthropic({ apiKey });
 
-  const systemPrompt = `你是一個幫助開發者回顧工作的助手。請根據 Claude Code session 資料，用繁體中文產生今日工作摘要。`;
+  const systemPrompt = `你是一個幫助開發者回顧工作的助手。請根據 Claude Code session 資料，用繁體中文產生工作摘要。`;
 
-  const userPrompt = `以下是我今天用 Claude Code 跑的所有 session，請幫我摘要：
-1. 我今天主要在做什麼工作？（分專案）
+  const totalTokens = tokens.input + tokens.output;
+  const scopeLine = projectPath
+    ? `以下是我在 ${dateKey} 針對專案 ${projectPath} 跑的所有 session，請幫我摘要：`
+    : `以下是我在 ${dateKey} 用 Claude Code 跑的所有 session，請幫我摘要：`;
+
+  const questions = projectPath
+    ? `1. 這個專案今天主要在做什麼工作？
 2. 哪些任務完成了？哪些還在進行？
 3. 有什麼值得注意的決策或踩過的雷？
-4. 整體 token 用量與成本（今日共 ${sessionCount} sessions，total tokens: ${totalTokens.input + totalTokens.output}，total cost: $${totalCost.toFixed(4)}）
+4. 整體 token 用量與成本（共 ${sessionCount} sessions，total tokens: ${totalTokens}，total cost: $${cost.toFixed(4)}）`
+    : `1. 我那天主要在做什麼工作？（分專案）
+2. 哪些任務完成了？哪些還在進行？
+3. 有什麼值得注意的決策或踩過的雷？
+4. 整體 token 用量與成本（共 ${sessionCount} sessions，total tokens: ${totalTokens}，total cost: $${cost.toFixed(4)}）`;
+
+  const userPrompt = `${scopeLine}
+${questions}
 
 <sessions>
 ${sessionData}
@@ -100,12 +147,14 @@ ${sessionData}
     .map((b) => (b as { type: 'text'; text: string }).text)
     .join('\n');
 
-  // Write to disk
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   fs.mkdirSync(summariesDir, { recursive: true });
-  fs.writeFileSync(path.join(summariesDir, `${dateStr}.md`), markdown, 'utf8');
+  fs.writeFileSync(summaryFilePath(date, projectEncoded), markdown, 'utf8');
 
   return markdown;
+}
+
+export async function generateTodaySummary(): Promise<string> {
+  return generateSummary({ date: new Date() });
 }
 
 export class ApiKeyMissingError extends Error {

@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { buildSummaryPrompt } from '../lib/summary';
 import type { SessionDigest } from '../lib/types';
 
@@ -60,5 +63,61 @@ describe('buildSummaryPrompt', () => {
 
   it('returns empty string for no sessions', () => {
     expect(buildSummaryPrompt([])).toBe('');
+  });
+});
+
+describe('summaryFilePath / listSummaries', () => {
+  const ORIGINAL_ENV = { ...process.env };
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'summaries-test-'));
+    process.env.SUMMARIES_DIR = tmpDir;
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it('summaryFilePath formats date without project as YYYY-MM-DD.md', async () => {
+    const { summaryFilePath } = await import('../lib/summary');
+    const p = summaryFilePath(new Date(2026, 4, 17));
+    expect(p).toBe(path.join(tmpDir, '2026-05-17.md'));
+  });
+
+  it('summaryFilePath appends encoded project slug', async () => {
+    const { summaryFilePath } = await import('../lib/summary');
+    const p = summaryFilePath(new Date(2026, 4, 17), '-Users-alice-Projects-my-app');
+    expect(p).toBe(path.join(tmpDir, '2026-05-17__-Users-alice-Projects-my-app.md'));
+  });
+
+  it('formatDateKey pads month and day', async () => {
+    const { formatDateKey } = await import('../lib/summary');
+    expect(formatDateKey(new Date(2026, 0, 3))).toBe('2026-01-03');
+  });
+
+  it('listSummaries returns empty when directory missing', async () => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    const { listSummaries } = await import('../lib/summary');
+    expect(listSummaries()).toEqual([]);
+  });
+
+  it('listSummaries parses date-only and project-suffixed filenames', async () => {
+    fs.writeFileSync(path.join(tmpDir, '2026-05-17.md'), 'all');
+    fs.writeFileSync(path.join(tmpDir, '2026-05-17__-Users-alice-Projects-my-app.md'), 'one');
+    fs.writeFileSync(path.join(tmpDir, '2026-05-16.md'), 'older');
+    fs.writeFileSync(path.join(tmpDir, 'not-a-summary.txt'), 'skip');
+
+    const { listSummaries } = await import('../lib/summary');
+    const entries = listSummaries();
+
+    expect(entries).toHaveLength(3);
+    expect(entries[0].date).toBe('2026-05-17');
+    expect(entries[0].projectEncoded).toBeNull();
+    expect(entries[1].date).toBe('2026-05-17');
+    expect(entries[1].projectEncoded).toBe('-Users-alice-Projects-my-app');
+    expect(entries[2].date).toBe('2026-05-16');
   });
 });
