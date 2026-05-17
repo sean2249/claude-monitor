@@ -1,27 +1,14 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { StatsStrip } from '@/components/stats-strip';
 import { SessionCard } from '@/components/session-card';
 import { SummaryDialog } from '@/components/summary-dialog';
+import { commonPrefixParts, relativeDisplayPath } from '@/lib/display';
 import type { Session } from '@/lib/types';
-
-function commonPrefixParts(paths: string[]): string[] {
-  const split = paths.map((p) => p.split('/').filter(Boolean)).filter((p) => p.length > 0);
-  if (split.length < 2) return [];
-  const ref = split.reduce((a, b) => (a.length <= b.length ? a : b));
-  let i = 0;
-  while (i < ref.length && split.every((parts) => parts[i] === ref[i])) i++;
-  return ref.slice(0, i);
-}
-
-function relativeDisplayPath(projectPath: string, prefixLen: number): string {
-  const parts = projectPath.split('/').filter(Boolean);
-  const unique = parts.slice(prefixLen);
-  return unique.join('/') || parts[parts.length - 1] || projectPath;
-}
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -75,6 +62,12 @@ function Dashboard() {
           >
             Generate Today&apos;s Summary
           </button>
+          <Link
+            href="/summaries"
+            className="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-colors"
+          >
+            Summaries
+          </Link>
         </div>
       </header>
 
