@@ -6,6 +6,7 @@ import {
   ApiKeyMissingError,
   EmptyRangeError,
   generateRangeSummary,
+  isSafeProjectEncoded,
   rangeSummaryFilePath,
 } from '@/lib/summary';
 
@@ -42,6 +43,9 @@ export async function GET(
   }
   const url = new URL(req.url);
   const projectEncoded = url.searchParams.get('project') ?? undefined;
+  if (projectEncoded !== undefined && !isSafeProjectEncoded(projectEncoded)) {
+    return NextResponse.json({ error: 'Invalid project slug.' }, { status: 400 });
+  }
 
   const filePath = rangeSummaryFilePath(parsed.start, parsed.end, projectEncoded);
   try {
@@ -63,6 +67,9 @@ export async function POST(
   }
   const url = new URL(req.url);
   const projectEncoded = url.searchParams.get('project') ?? undefined;
+  if (projectEncoded !== undefined && !isSafeProjectEncoded(projectEncoded)) {
+    return NextResponse.json({ error: 'Invalid project slug.' }, { status: 400 });
+  }
 
   try {
     await watcherReady;

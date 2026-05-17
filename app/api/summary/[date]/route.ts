@@ -2,7 +2,12 @@ import fs from 'fs';
 import { NextResponse } from 'next/server';
 import '@/lib/init';
 import { watcherReady } from '@/lib/init';
-import { ApiKeyMissingError, generateSummary, summaryFilePath } from '@/lib/summary';
+import {
+  ApiKeyMissingError,
+  generateSummary,
+  isSafeProjectEncoded,
+  summaryFilePath,
+} from '@/lib/summary';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -25,6 +30,9 @@ export async function GET(
   }
   const url = new URL(req.url);
   const projectEncoded = url.searchParams.get('project') ?? undefined;
+  if (projectEncoded !== undefined && !isSafeProjectEncoded(projectEncoded)) {
+    return NextResponse.json({ error: 'Invalid project slug.' }, { status: 400 });
+  }
 
   const filePath = summaryFilePath(date, projectEncoded);
   try {
@@ -46,6 +54,9 @@ export async function POST(
   }
   const url = new URL(req.url);
   const projectEncoded = url.searchParams.get('project') ?? undefined;
+  if (projectEncoded !== undefined && !isSafeProjectEncoded(projectEncoded)) {
+    return NextResponse.json({ error: 'Invalid project slug.' }, { status: 400 });
+  }
 
   try {
     await watcherReady;

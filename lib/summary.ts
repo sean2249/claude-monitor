@@ -27,8 +27,34 @@ export function formatDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+// projectEncoded ends up inside a filename joined under summariesDir. Without a
+// strict allowlist a value from the query string could contain '..' or path
+// separators and escape the summaries directory, enabling arbitrary file
+// read/write. Claude Code's own encodedFolder slugs only ever contain
+// alphanumerics, '-', '_' and '.', so reject anything else outright.
+const PROJECT_ENCODED_RE = /^[A-Za-z0-9._-]+$/;
+
+export class InvalidProjectEncodedError extends Error {
+  constructor(slug: string) {
+    super(`Invalid project slug: ${JSON.stringify(slug)}`);
+    this.name = 'InvalidProjectEncodedError';
+  }
+}
+
+export function isSafeProjectEncoded(slug: string): boolean {
+  if (!slug || slug.length > 255) return false;
+  if (slug === '.' || slug === '..') return false;
+  if (slug.startsWith('.')) return false;
+  return PROJECT_ENCODED_RE.test(slug);
+}
+
+function assertSafeProjectEncoded(slug: string): void {
+  if (!isSafeProjectEncoded(slug)) throw new InvalidProjectEncodedError(slug);
+}
+
 export function summaryFilePath(date: Date, projectEncoded?: string): string {
   const key = formatDateKey(date);
+  if (projectEncoded !== undefined) assertSafeProjectEncoded(projectEncoded);
   const name = projectEncoded ? `${key}__${projectEncoded}.md` : `${key}.md`;
   return path.join(summariesDir, name);
 }
@@ -40,6 +66,7 @@ export function rangeSummaryFilePath(
 ): string {
   const startKey = formatDateKey(startDate);
   const endKey = formatDateKey(endDate);
+  if (projectEncoded !== undefined) assertSafeProjectEncoded(projectEncoded);
   const base = `${startKey}_to_${endKey}`;
   const name = projectEncoded ? `${base}__${projectEncoded}.md` : `${base}.md`;
   return path.join(summariesDir, name);
