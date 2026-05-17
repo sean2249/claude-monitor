@@ -1,6 +1,5 @@
 import fs from 'fs';
 import { NextResponse } from 'next/server';
-import '@/lib/init';
 import { watcherReady } from '@/lib/init';
 import {
   ApiKeyMissingError,

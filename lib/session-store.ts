@@ -94,17 +94,30 @@ class SessionStore {
       return true;
     });
 
-    const tokens: Tokens = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
-    let cost = 0;
+    // Both the aggregate and per-digest values are computed from the day's
+    // tokenEvents only — using full‑session `s.tokens` / `s.estimatedCost`
+    // would over‑report for sessions that span multiple days. Per‑session day
+    // tokens feed `estimateCost`, so the per‑digest cost lines up with the
+    // aggregate.
+    const aggTokens: Tokens = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
+    let aggCost = 0;
+    const perSession = new Map<string, { tokens: Tokens; cost: number }>();
     for (const s of matched) {
+      const dayTokens: Tokens = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
       for (const ev of s.tokenEvents) {
         if (ev.ts < start || ev.ts >= end) continue;
-        tokens.input += ev.input;
-        tokens.output += ev.output;
-        tokens.cacheRead += ev.cacheRead;
-        tokens.cacheCreation += ev.cacheCreation;
+        dayTokens.input += ev.input;
+        dayTokens.output += ev.output;
+        dayTokens.cacheRead += ev.cacheRead;
+        dayTokens.cacheCreation += ev.cacheCreation;
       }
-      cost += s.estimatedCost;
+      const dayCost = estimateCost(dayTokens, s.model);
+      perSession.set(s.id, { tokens: dayTokens, cost: dayCost });
+      aggTokens.input += dayTokens.input;
+      aggTokens.output += dayTokens.output;
+      aggTokens.cacheRead += dayTokens.cacheRead;
+      aggTokens.cacheCreation += dayTokens.cacheCreation;
+      aggCost += dayCost;
     }
 
     const digests: SessionDigest[] = matched.map((s) => {
@@ -119,20 +132,21 @@ class SessionStore {
           .join(' ')
           .slice(0, 500);
 
+      const day = perSession.get(s.id)!;
       return {
         project: s.projectPath,
         startedAt: s.startedAt.toISOString(),
         endedAt: s.lastActivityAt.toISOString(),
         status: computeStatus(s.fileMtime, s.lastRole),
         messageCount: s.messageCount,
-        tokens: s.tokens,
-        cost: s.estimatedCost,
+        tokens: day.tokens,
+        cost: day.cost,
         firstUserMessage: firstUser ? getText(firstUser.blocks) : '(none)',
         lastAssistantMessage: lastAssistant ? getText(lastAssistant.blocks) : '(none)',
       };
     });
 
-    return { digests, sessionCount: matched.length, tokens, cost };
+    return { digests, sessionCount: matched.length, tokens: aggTokens, cost: aggCost };
   }
 
   listProjects(): { encodedFolder: string; projectPath: string; lastActivityAt: Date }[] {
